@@ -21,8 +21,9 @@ const EditBlog = () => {
     error: '',
     success: '',
   });
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Fetch blog data on mount
   useEffect(() => {
     const fetchBlog = async () => {
       setStatus({ loading: true, error: '', success: '' });
@@ -33,13 +34,15 @@ const EditBlog = () => {
           error: 'Please log in to edit a blog.',
           loading: false,
         }));
-        navigate('/');
+        setIsModalOpen(true);
+        setTimeout(() => navigate('/'), 2000);
         return;
       }
 
       try {
+        console.log('Fetching blog with title:', title);
         const response = await axios.get(
-          `http://localhost:8080/blog/${encodeURIComponent(title)}`,
+          `https://licapp.onrender.com/blog/${encodeURIComponent(title)}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -49,6 +52,7 @@ const EditBlog = () => {
         );
 
         const { data } = response;
+        console.log('Fetched blog data:', data);
         setFormData({
           title: data.title || '',
           description: data.description || '',
@@ -59,7 +63,6 @@ const EditBlog = () => {
           postdate: data.postdate ? data.postdate.split('T')[0] : '',
           controller: data.controller || '',
         });
-        console.log('Fetched blog:', data);
       } catch (err) {
         console.error('Fetch error:', err.response || err.message);
         setStatus((prev) => ({
@@ -67,6 +70,7 @@ const EditBlog = () => {
           error: err.response?.data || 'Failed to load blog. Please try again.',
           loading: false,
         }));
+        setIsModalOpen(true);
       } finally {
         setStatus((prev) => ({ ...prev, loading: false }));
       }
@@ -75,24 +79,22 @@ const EditBlog = () => {
     fetchBlog();
   }, [title, navigate]);
 
-  // Handle input changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     setStatus({ loading: true, error: '', success: '' });
 
-    // Basic validation
     if (!formData.title || !formData.description || !formData.content || !formData.author) {
       setStatus({
         loading: false,
         error: 'Please fill in all required fields (Title, Description, Content, Author).',
         success: '',
       });
+      setIsModalOpen(true);
       return;
     }
 
@@ -103,11 +105,29 @@ const EditBlog = () => {
         error: 'Please log in to edit a blog.',
         success: '',
       });
+      setIsModalOpen(true);
       navigate('/');
       return;
     }
 
     try {
+      let username;
+      try {
+        username = parseJwt(token).sub;
+        console.log('Parsed username from JWT:', username);
+      } catch (jwtError) {
+        console.error('JWT parsing error:', jwtError);
+        setStatus({
+          loading: false,
+          error: 'Invalid authentication token. Please log in again.',
+          success: '',
+        });
+        setIsModalOpen(true);
+        localStorage.removeItem('token');
+        navigate('/');
+        return;
+      }
+
       const payload = {
         title: formData.title,
         description: formData.description,
@@ -121,9 +141,9 @@ const EditBlog = () => {
         controller: formData.controller || null,
       };
 
-      console.log('Updating blog:', payload);
+      console.log('Updating blog with payload:', payload);
       const response = await axios.put(
-        `http://localhost:8080/blog/${encodeURIComponent(title)}`,
+        `https://licapp.onrender.com/blog/${encodeURIComponent(title)}`,
         payload,
         {
           headers: {
@@ -138,7 +158,8 @@ const EditBlog = () => {
         error: '',
         success: response.data || 'Blog updated successfully!',
       });
-      navigate('/dashboard');
+      setIsModalOpen(true);
+      setTimeout(() => navigate('/dashboard'), 2000);
     } catch (err) {
       console.error('Update error:', err.response || err.message);
       setStatus({
@@ -146,167 +167,192 @@ const EditBlog = () => {
         error: err.response?.data || 'Failed to update blog. Please try again.',
         success: '',
       });
+      setIsModalOpen(true);
     }
   };
 
-  // Handle logout
   const handleLogout = () => {
     localStorage.removeItem('token');
     navigate('/');
   };
 
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setStatus((prev) => ({ ...prev, error: '', success: '' }));
+  };
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
+
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold">Edit Blog Post</h2>
-          <div className="space-x-4">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-            >
-              Back to Dashboard
-            </button>
-            <button
-              onClick={handleLogout}
-              className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-            >
-              Logout
-            </button>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex">
+      {/* Sidebar */}
+      <div
+        className={`fixed inset-y-0 left-0 w-64 bg-white/90 backdrop-blur-lg shadow-xl transform ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:w-64 p-6 z-50`}
+      >
+        <div className="flex justify-between items-center mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 font-serif">Edit Blog</h2>
+          <button
+            className="lg:hidden text-gray-600 hover:text-gray-800"
+            onClick={toggleSidebar}
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
-
-        {status.error && (
-          <p className="text-red-500 text-center mb-4">{status.error}</p>
-        )}
-        {status.success && (
-          <p className="text-green-500 text-center mb-4">{status.success}</p>
-        )}
-
-        {status.loading && !formData.title ? (
-          <p className="text-center">Loading blog...</p>
-        ) : (
-          <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-lg">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="mb-4">
-                <label className="block text-gray-700 mb-2" htmlFor="title">
-                  Title
-                </label>
-                <input
-                  type="text"
-                  id="title"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-gray-700 mb-2" htmlFor="author">
-                  Author
-                </label>
-                <input
-                  type="text"
-                  id="author"
-                  name="author"
-                  value={formData.author}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-gray-700 mb-2" htmlFor="img">
-                  Image URL
-                </label>
-                <input
-                  type="text"
-                  id="img"
-                  name="img"
-                  value={formData.img}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-gray-700 mb-2" htmlFor="postdate">
-                  Post Date
-                </label>
-                <input
-                  type="date"
-                  id="postdate"
-                  name="postdate"
-                  value={formData.postdate}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-gray-700 mb-2" htmlFor="tags">
-                  Tags (comma-separated)
-                </label>
-                <input
-                  type="text"
-                  id="tags"
-                  name="tags"
-                  value={formData.tags}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., Travel, Nature"
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-gray-700 mb-2" htmlFor="controller">
-                  Controller
-                </label>
-                <input
-                  type="text"
-                  id="controller"
-                  name="controller"
-                  value={formData.controller}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            <div className="mb-4">
-              <label className="block text-gray-700 mb-2" htmlFor="description">
-                Description
-              </label>
-              <textarea
-                id="description"
-                name="description"
-                value={formData.description}
-                onChange={handleChange}
-                className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                rows="4"
-                required
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block text-gray-700 mb-2" htmlFor="content">
-                Content
-              </label>
-              <textarea
-                id="content"
-                name="content"
-                value={formData.content}
-                onChange={handleChange}
-                className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                rows="8"
-                required
-              />
-            </div>
+        <nav className="space-y-2">
+          {[
+            { path: '/dashboard', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+            { path: '/dashboard/plans', label: 'View Plans', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
+            { path: '/dashboard/testimonials', label: 'View Testimonials', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5v2h4m6 0h4v-2h-4m-6-6h.01M9 16h.01' },
+            { path: '/dashboard/forms', label: 'View Forms', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+            { path: '/create-blog', label: 'Create Blog', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' },
+          ].map((item) => (
             <button
-              type="submit"
-              disabled={status.loading}
-              className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600 disabled:bg-blue-300"
+              key={item.path}
+              onClick={() => {
+                navigate(item.path);
+                setIsSidebarOpen(false);
+              }}
+              className="w-full flex items-center space-x-2 px-4 py-2 text-gray-700 hover:bg-indigo-100 hover:text-indigo-600 rounded-lg transition duration-200"
             >
-              {status.loading ? 'Updating...' : 'Update Blog'}
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={item.icon} />
+              </svg>
+              <span>{item.label}</span>
             </button>
-          </form>
-        )}
+          ))}
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center space-x-2 px-4 py-2 text-red-600 hover:bg-red-100 rounded-lg transition duration-200"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h3a3 3 0 013 3v1" />
+            </svg>
+            <span>Logout</span>
+          </button>
+        </nav>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 p-4 sm:p-6 lg:p-8">
+        <button
+          className="lg:hidden mb-4 text-gray-600 hover:text-gray-800"
+          onClick={toggleSidebar}
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <div className="max-w-5xl mx-auto bg-white/80 backdrop-blur-lg rounded-2xl shadow-2xl p-6 sm:p-8 lg:p-10 transform transition-all duration-500 hover:shadow-3xl">
+          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 font-serif tracking-tight mb-8">
+            Edit Blog Post
+          </h2>
+          {status.loading && !formData.title ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-indigo-600"></div>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                {[
+                  { id: 'title', label: 'Title', type: 'text', required: true },
+                  { id: 'author', label: 'Author', type: 'text', required: true },
+                  { id: 'img', label: 'Image URL', type: 'text' },
+                  { id: 'postdate', label: 'Post Date', type: 'date' },
+                  { id: 'tags', label: 'Tags (comma-separated)', type: 'text', placeholder: 'e.g., Travel, Nature' },
+                
+                ].map((field) => (
+                  <div key={field.id}>
+                    <label
+                      htmlFor={field.id}
+                      className="block text-sm font-medium text-gray-700 font-sans mb-1"
+                    >
+                      {field.label}
+                    </label>
+                    <input
+                      type={field.type}
+                      id={field.id}
+                      name={field.id}
+                      value={formData[field.id]}
+                      onChange={handleChange}
+                      className="w-full p-3 border border-gray-200 rounded-lg bg-white/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200 text-gray-800 placeholder-gray-400"
+                      placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
+                      required={field.required}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div>
+                <label
+                  htmlFor="description"
+                  className="block text-sm font-medium text-gray-700 font-sans mb-1"
+                >
+                  Description
+                </label>
+                <textarea
+                  id="description"
+                  name="description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  className="w-full p-3 border border-gray-200 rounded-lg bg-white/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200 text-gray-800 placeholder-gray-400"
+                  rows="5"
+                  placeholder="Enter blog description"
+                  required
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="content"
+                  className="block text-sm font-medium text-gray-700 font-sans mb-1"
+                >
+                  Content
+                </label>
+                <textarea
+                  id="content"
+                  name="content"
+                  value={formData.content}
+                  onChange={handleChange}
+                  className="w-full p-3 border border-gray-200 rounded-lg bg-white/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200 text-gray-800 placeholder-gray-400"
+                  rows="8"
+                  placeholder="Enter blog content"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={status.loading}
+                className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white p-3 rounded-lg hover:from-indigo-700 hover:to-blue-700 disabled:opacity-50 transition duration-300 font-medium text-lg tracking-wide transform hover:scale-105"
+              >
+                {status.loading ? 'Updating...' : 'Update Blog'}
+              </button>
+            </form>
+          )}
+
+          {/* Modal for Error/Success */}
+          {isModalOpen && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-6 max-w-md w-full transform transition-all duration-300 scale-95 animate-in">
+                <h3 className="text-xl font-bold text-gray-900 mb-4">
+                  {status.success ? 'Success' : 'Error'}
+                </h3>
+                <p className={status.success ? 'text-green-600' : 'text-red-600'}>
+                  {status.success || status.error}
+                </p>
+                <button
+                  onClick={closeModal}
+                  className="mt-6 w-full bg-indigo-600 text-white p-2 rounded-lg hover:bg-indigo-700 transition duration-200"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
